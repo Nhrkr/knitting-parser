@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Knitting Pattern Parser</title>
+  <style>
+    body {
+      background: #fdf6ff;
+      color: #3a1a47;
+      font-family: "Comic Sans MS", cursive, sans-serif;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2em;
+      margin-bottom: 20px;
+      color: #d36ac2;
+    }
+
+    form {
+      background: #fff0fa;
+      border: 2px dashed #e3c6f5;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0px 4px 8px rgba(200, 160, 220, 0.2);
+    }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: bold;
+      color: #6d3d8e;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      border: 1px solid #d6a7f2;
+      border-radius: 8px;
+      background-color: #f9f0ff;
+    }
+
+    input[type="file"] {
+      padding: 10px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, #f3b3ec, #d1b3ff);
+      color: #6d3d8e;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+    input[type="file"]::file-selector-button {
+      padding: 6px 12px;
+      border-radius: 8px;
+      background-color: #d36ac2;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    input[type="file"]::file-selector-button:hover {
+      background-color: #b145a2;
+    }
+
+    button {
+      background: linear-gradient(145deg, #f3b3ec, #d1b3ff);
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 12px;
+      font-size: 1em;
+      transition: all 0.2s ease-in-out;
+    }
+
+    button:hover {
+      background: linear-gradient(145deg, #ec8ede, #b18aff);
+      transform: scale(1.03);
+    }
+
+    #loadingIndicator {
+      color: #c762b4;
+      font-style: italic;
+    }
+
+    #overview, #output {
+      background: #fff9fd;
+      padding: 20px;
+      margin-top: 20px;
+      border-radius: 12px;
+      border: 1px solid #e9d1f8;
+    }
+
+    h2, h3 {
+      color: #b145a2;
+    }
+
+    ul, ol {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    #resultsContainer {
+      background-color: #fef6ff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px dotted #dcb1f4;
+      margin-top: 24px;
+      box-shadow: 0 4px 6px rgba(180, 120, 220, 0.1);
+    }
+
+    pre#output {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    #overview ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    #overview li {
+      margin-bottom: 6px;
+    }
+
+    h3 {
+      font-size: 1.2em;
+      margin-top: 1em;
+      color: #a33b91;
+    }
+
+    #resultsContainer h3, #resultsContainer p, #resultsContainer li {
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+
+    .section-block {
+      margin-bottom: 2em;
+    }
+
+    .section-block progress {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .section-block ol {
+      list-style-type: decimal;
+    }
+    li input[type="checkbox"] {
+      margin-right: 10px;
+      transform: scale(1.2);
+      float: left;
+      margin-top: 4px;
+    }
+
+    .section-block ol li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div style="max-width: 800px; margin: auto; font-family: sans-serif;">
+    <h1>🧶 Knitting Pattern Parser</h1>
+    <form id="patternForm">
+      <label for="patternFile">Upload PDF:</label>
+      <input type="file" id="patternFile" accept=".pdf" required>
+      <div id="previewImageContainer" style="margin-top: 12px; text-align: center;">
+        <canvas id="patternImagePreview" style="max-width: 100%; border-radius: 12px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); display: none;"></canvas>
+      </div>
+      <label for="bustMeasurement">Bust:</label>
+      <input type="number" id="bustMeasurement" required>
+      <select id="measurementUnit">
+        <option value="inches">inches</option>
+        <option value="cm">cm</option>
+      </select>
+      <select id="ease">
+        <option value="fitted">fitted</option>
+        <option value="relaxed">relaxed</option>
+        <option value="oversized">oversized</option>
+      </select>
+      <button type="submit">Parse</button>
+      <div id="loadingIndicator" style="display:none; margin-top: 10px;">⏳ Parsing pattern... please wait.</div>
+      <button type="button" id="regenerateButton" style="margin-top: 10px;">🔁 Regenerate</button>
+    </form>
+    <div id="resultsContainer" style="display:none;">
+      <div id="overview"></div>
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    document.getElementById('patternForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const file = document.getElementById('patternFile').files[0];
+      const bust = document.getElementById('bustMeasurement').value;
+      const unit = document.getElementById('measurementUnit').value;
+      const ease = document.getElementById('ease').value;
+      const patternTextRaw = await extractTextFromPDF(file);
+      const safeText = patternTextRaw.replace(/[`$]/g, '');  // strip backticks/dollar signs
+      const patternText = safeText;
+
+      document.getElementById('loadingIndicator').style.display = 'block';
+
+      const cacheKey = `${file.name}-${bust}-${unit}-${ease}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const data = JSON.parse(cached);
+        renderInstructions(data);
+        document.getElementById('loadingIndicator').style.display = 'none';
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:3001/parse', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ patternText, bust, unit, ease })
+        });
+
+        const data = await response.json();
+
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        renderInstructions(data);
+      } catch (err) {
+        document.getElementById('output').textContent = `❌ Error: ${err.message}`;
+      }
+      document.getElementById('loadingIndicator').style.display = 'none';
+    });
+
+    document.getElementById('regenerateButton').addEventListener('click', () => {
+      localStorage.removeItem(`${document.getElementById('patternFile').files[0].name}-${document.getElementById('bustMeasurement').value}-${document.getElementById('measurementUnit').value}-${document.getElementById('ease').value}`);
+      document.getElementById('patternForm').dispatchEvent(new Event('submit'));
+    });
+
+    async function extractTextFromPDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(item => item.str).join(' ') + '\n';
+      }
+
+      // Render first page as image preview
+      const canvas = document.getElementById('patternImagePreview');
+      const context = canvas.getContext('2d');
+      const firstPage = await pdf.getPage(1);
+      const viewport = firstPage.getViewport({ scale: 1.5 });
+
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      canvas.style.display = 'block';
+
+      await firstPage.render({ canvasContext: context, viewport }).promise;
+
+      return fullText;
+    }
+
+    function renderInstructions(data) {
+      const overviewDiv = document.getElementById('overview');
+      const outputDiv = document.getElementById('output');
+      
+      overviewDiv.innerHTML = '';
+      outputDiv.innerHTML = '';
+
+      console.log('Received data in renderInstructions:', data);
+      const rawText = data?.raw?.message || data?.content || data?.message?.content;
+
+      let instructionsHTML = '<h2>🪡 Knitting Instructions</h2>';
+      if (typeof rawText === 'string') {
+        const lines = rawText.split('\n');
+        let currentSection = '';
+        let steps = [];
+        instructionsHTML += '<div class="instruction-text">';
+        lines.forEach(line => {
+          const trimmed = line.trim();
+          if (trimmed.match(/^\*\*(.*?)\*\*$/)) {
+            if (currentSection && steps.length) {
+              instructionsHTML += `
+    <div class="section-block">
+      <h3>${currentSection}</h3>
+      <progress value="0" max="${steps.length}" data-section="${currentSection}"></progress>
+      <ol>${steps.map((step, index) => `<li><input type="checkbox" data-section="${currentSection}" data-index="${index}"><span>${step}</span></li>`).join('')}</ol>
+    </div>
+  `;
+            }
+            currentSection = trimmed.replace(/^\*\*|\*\*$/g, '');
+            steps = [];
+          } else if (/^\d+\./.test(trimmed)) {
+            steps.push(trimmed.replace(/^\d+\.\s*/, ''));
+          } else if (trimmed.startsWith('-')) {
+            if (steps.length === 0) steps.push(trimmed.replace(/^-/, '').trim());
+            else steps[steps.length - 1] += ' ' + trimmed.replace(/^-/, '').trim();
+          } else if (trimmed.length > 0) {
+            if (steps.length === 0) steps.push(trimmed);
+            else steps[steps.length - 1] += ' ' + trimmed;
+          }
+        });
+        if (currentSection && steps.length) {
+          instructionsHTML += `
+    <div class="section-block">
+      <h3>${currentSection}</h3>
+      <progress value="0" max="${steps.length}" data-section="${currentSection}"></progress>
+      <ol>${steps.map((step, index) => `<li><input type="checkbox" data-section="${currentSection}" data-index="${index}"><span>${step}</span></li>`).join('')}</ol>
+    </div>
+  `;
+        }
+        instructionsHTML += '</div>';
+      } else if (data.instructions) {
+        if (Array.isArray(data.instructions)) {
+          data.instructions.forEach(section => {
+            instructionsHTML += `<h3>${section.section}</h3><ul>`;
+            if (Array.isArray(section.steps)) {
+              section.steps.forEach(step => {
+                instructionsHTML += `<li>${step}</li>`;
+              });
+            } else if (typeof section.steps === 'string') {
+              instructionsHTML += `<li>${section.steps}</li>`;
+            }
+            instructionsHTML += '</ul>';
+          });
+        } else if (typeof data.instructions === 'string') {
+          instructionsHTML += `<p>${data.instructions}</p>`;
+        } else if (typeof data.instructions === 'object') {
+          Object.entries(data.instructions).forEach(([sectionTitle, steps]) => {
+            instructionsHTML += `<h3>${sectionTitle}</h3><ul>`;
+            if (Array.isArray(steps)) {
+              steps.forEach(step => instructionsHTML += `<li>${step}</li>`);
+            } else if (typeof steps === 'string') {
+              instructionsHTML += `<li>${steps}</li>`;
+            }
+            instructionsHTML += '</ul>';
+          });
+        }
+      } else {
+        instructionsHTML += '<p>No instructions found in the parsed response.</p>';
+      }
+
+      outputDiv.innerHTML = instructionsHTML;
+
+      console.log('Rendered Instructions HTML:', instructionsHTML);
+
+      document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const section = cb.dataset.section;
+          const all = document.querySelectorAll(`input[type="checkbox"][data-section="${section}"]`);
+          const done = Array.from(all).filter(box => box.checked).length;
+          const progress = document.querySelector(`progress[data-section="${section}"]`);
+          progress.value = done;
+        });
+      });
+
+      document.getElementById('resultsContainer').style.display = 'block';
+    }
+  </script>
+</body>
+</html> 
